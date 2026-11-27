@@ -1,0 +1,781 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // GLOBAL HARDENED PRIMITIVES
+    // =========================================================================
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isVerifiedOwner(uid) {
+      return isVerifiedUser() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isIntInRange(val, minVal, maxVal) {
+      return val is int && val >= minVal && val <= maxVal;
+    }
+
+    function isNumInRange(val, minVal, maxVal) {
+      return (val is int || val is float) && val >= minVal && val <= maxVal;
+    }
+
+    function userExists(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function publicGardenExists(uid) {
+      return exists(/databases/$(database)/documents/publicGardens/$(uid));
+    }
+
+    function getChatRoom(pairId) {
+      return get(/databases/$(database)/documents/privateChats/$(pairId)).data;
+    }
+
+    function isChatRoomParticipant(pairId) {
+      return exists(/databases/$(database)/documents/privateChats/$(pairId)) &&
+        (getChatRoom(pairId).uidA == request.auth.uid || getChatRoom(pairId).uidB == request.auth.uid);
+    }
+
+    function getStudyRoom(roomId) {
+      return get(/databases/$(database)/documents/studyRooms/$(roomId)).data;
+    }
+
+    function isStudyRoomParticipant(roomId) {
+      return exists(/databases/$(database)/documents/studyRooms/$(roomId)) &&
+        request.auth.uid in getStudyRoom(roomId).participantUids;
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS (Anti-Update-Gap)
+    // =========================================================================
+    function isValidSurveyMap(survey) {
+      return survey is map &&
+        survey.keys().hasAll(['s1', 's2', 's3', 'date']) &&
+        survey.keys().hasOnly(['s1', 's2', 's3', 'date']) &&
+        isIntInRange(survey.s1, 1, 5) &&
+        isIntInRange(survey.s2, 1, 5) &&
+        isIntInRange(survey.s3, 1, 5) &&
+        isValidStr(survey.date, 1, 30);
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+        'uid', 'email', 'fullname', 'className', 'schoolName', 'treeName',
+        'hasNamedTree', 'level', 'xp', 'maxXp', 'seedPoints', 'streakDays',
+        'lastActiveDate', 'todayFocusMins', 'weeklyFocusMins',
+        'socialInterruptionCount', 'dragonUpgradeLevel', 'exploredStages',
+        'hasBadgeKienTri', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'email', 'fullname', 'className', 'schoolName', 'treeName',
+        'hasNamedTree', 'level', 'xp', 'maxXp', 'seedPoints', 'streakDays',
+        'lastActiveDate', 'todayFocusMins', 'weeklyFocusMins',
+        'socialInterruptionCount', 'dragonUpgradeLevel', 'lastCdsScore',
+        'exploredStages', 'hasBadgeKienTri', 'khktSurvey', 'createdAt', 'updatedAt'
+      ]) &&
+      data.uid == request.auth.uid &&
+      isValidId(data.uid) &&
+      isValidStr(data.email, 3, 200) &&
+      isValidStr(data.fullname, 1, 80) &&
+      isValidStr(data.className, 1, 40) &&
+      isValidStr(data.schoolName, 1, 100) &&
+      isValidStr(data.treeName, 1, 32) &&
+      data.hasNamedTree is bool &&
+      isIntInRange(data.level, 1, 10) &&
+      isIntInRange(data.xp, 0, 10000000) &&
+      isIntInRange(data.maxXp, 150, 10000000) &&
+      isIntInRange(data.seedPoints, 0, 10000000) &&
+      isIntInRange(data.streakDays, 0, 10000) &&
+      isValidStr(data.lastActiveDate, 1, 20) &&
+      isIntInRange(data.todayFocusMins, 0, 1440) &&
+      data.weeklyFocusMins is list &&
+      data.weeklyFocusMins.size() == 7 &&
+      isIntInRange(data.weeklyFocusMins[0], 0, 1440) &&
+      isIntInRange(data.socialInterruptionCount, 0, 100000) &&
+      isIntInRange(data.dragonUpgradeLevel, 0, 5) &&
+      (!('lastCdsScore' in data) || isNumInRange(data.lastCdsScore, 1.0, 5.0)) &&
+      data.exploredStages is list &&
+      data.exploredStages.size() >= 1 &&
+      data.exploredStages.size() <= 10 &&
+      isIntInRange(data.exploredStages[0], 1, 10) &&
+      data.hasBadgeKienTri is bool &&
+      (!('khktSurvey' in data) || isValidSurveyMap(data.khktSurvey)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidUserTask(data) {
+      return data.keys().hasAll(['uid', 'text', 'category', 'completed', 'rewarded', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'text', 'category', 'estimatedMins', 'completed', 'rewarded', 'createdAt', 'updatedAt']) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.uid) &&
+        isValidStr(data.text, 1, 240) &&
+        isValidStr(data.category, 1, 40) &&
+        (!('estimatedMins' in data) || isIntInRange(data.estimatedMins, 5, 180)) &&
+        data.completed is bool &&
+        data.rewarded is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPlantQuest(data) {
+      return data.keys().hasAll(['uid', 'text', 'seedCost', 'repeatable', 'completed', 'count', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'text', 'seedCost', 'repeatable', 'completed', 'count', 'createdAt', 'updatedAt']) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.uid) &&
+        isValidStr(data.text, 1, 200) &&
+        isIntInRange(data.seedCost, 10, 1000) &&
+        data.repeatable is bool &&
+        data.completed is bool &&
+        isIntInRange(data.count, 0, 100000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidJournalEntry(data) {
+      return data.keys().hasAll([
+        'uid', 'dateLabel', 'mood', 'screenTime', 'deepWorkNote',
+        'distractionLesson', 'gratitude', 'tomorrowPlan', 'cdsNote',
+        'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'dateLabel', 'mood', 'screenTime', 'deepWorkNote',
+        'distractionLesson', 'gratitude', 'tomorrowPlan', 'cdsNote',
+        'aiCognitiveTrap', 'aiInsight', 'aiNextStep', 'createdAt', 'updatedAt'
+      ]) &&
+      data.uid == request.auth.uid &&
+      isValidId(data.uid) &&
+      isValidStr(data.dateLabel, 1, 40) &&
+      isValidStr(data.mood, 1, 80) &&
+      isValidStr(data.screenTime, 0, 80) &&
+      isValidStr(data.deepWorkNote, 0, 120) &&
+      isValidStr(data.distractionLesson, 0, 600) &&
+      isValidStr(data.gratitude, 0, 400) &&
+      isValidStr(data.tomorrowPlan, 0, 400) &&
+      isValidStr(data.cdsNote, 1, 40) &&
+      (!('aiCognitiveTrap' in data) || isValidStr(data.aiCognitiveTrap, 0, 160)) &&
+      (!('aiInsight' in data) || isValidStr(data.aiInsight, 0, 800)) &&
+      (!('aiNextStep' in data) || isValidStr(data.aiNextStep, 0, 400)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidCdsRecord(data) {
+      return data.keys().hasAll(['uid', 'dateLabel', 'score', 'answers', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'dateLabel', 'score', 'answers', 'createdAt']) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.uid) &&
+        isValidStr(data.dateLabel, 1, 30) &&
+        isNumInRange(data.score, 1.0, 5.0) &&
+        data.answers is list &&
+        data.answers.size() == 10 &&
+        isIntInRange(data.answers[0], 1, 5) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAiMessage(data) {
+      return data.keys().hasAll(['uid', 'role', 'mode', 'text', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'mode', 'text', 'createdAt']) &&
+        data.uid == request.auth.uid &&
+        isValidId(data.uid) &&
+        data.role in ['user', 'assistant'] &&
+        data.mode in ['counselor', 'math', 'literature', 'english'] &&
+        isValidStr(data.text, 1, 4000) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPublicGarden(data) {
+      return data.keys().hasAll([
+        'uid', 'fullname', 'className', 'schoolName', 'treeName',
+        'level', 'xp', 'streakDays', 'todayFocusMins', 'dragonUpgradeLevel',
+        'isPublic', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid', 'fullname', 'className', 'schoolName', 'treeName',
+        'level', 'xp', 'streakDays', 'todayFocusMins', 'dragonUpgradeLevel',
+        'isPublic', 'updatedAt'
+      ]) &&
+      data.uid == request.auth.uid &&
+      isValidId(data.uid) &&
+      isValidStr(data.fullname, 1, 80) &&
+      isValidStr(data.className, 1, 40) &&
+      isValidStr(data.schoolName, 1, 100) &&
+      isValidStr(data.treeName, 1, 32) &&
+      isIntInRange(data.level, 1, 10) &&
+      isIntInRange(data.xp, 0, 10000000) &&
+      isIntInRange(data.streakDays, 0, 10000) &&
+      isIntInRange(data.todayFocusMins, 0, 1440) &&
+      isIntInRange(data.dragonUpgradeLevel, 0, 5) &&
+      data.isPublic is bool &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidFriendRequest(data) {
+      return data.keys().hasAll([
+        'fromUid', 'fromName', 'fromClass', 'fromTreeName', 'fromLevel',
+        'toUid', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'fromUid', 'fromName', 'fromClass', 'fromTreeName', 'fromLevel',
+        'toUid', 'status', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.fromUid) &&
+      isValidId(data.toUid) &&
+      data.fromUid != data.toUid &&
+      isValidStr(data.fromName, 1, 80) &&
+      isValidStr(data.fromClass, 1, 40) &&
+      isValidStr(data.fromTreeName, 1, 32) &&
+      isIntInRange(data.fromLevel, 1, 10) &&
+      data.status in ['pending', 'accepted', 'declined'] &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidFriendship(data) {
+      return data.keys().hasAll(['uidA', 'uidB', 'days', 'lastCoStudyDate', 'coTreeXp', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uidA', 'uidB', 'days', 'lastCoStudyDate', 'coTreeXp', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uidA) &&
+        isValidId(data.uidB) &&
+        data.uidA != data.uidB &&
+        (data.uidA == request.auth.uid || data.uidB == request.auth.uid) &&
+        isIntInRange(data.days, 1, 10000) &&
+        isValidStr(data.lastCoStudyDate, 1, 20) &&
+        isIntInRange(data.coTreeXp, 0, 10000000) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidGardenGift(data) {
+      return data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'xpAmount', 'seedCost', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['fromUid', 'fromName', 'toUid', 'xpAmount', 'seedCost', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.fromUid) &&
+        isValidId(data.toUid) &&
+        data.fromUid != data.toUid &&
+        isValidStr(data.fromName, 1, 80) &&
+        isIntInRange(data.xpAmount, 1, 1000) &&
+        isIntInRange(data.seedCost, 1, 1000) &&
+        data.status in ['pending', 'claimed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidForumMessage(data) {
+      return data.keys().hasAll(['authorUid', 'senderLabel', 'treeBadge', 'channel', 'text', 'createdAt']) &&
+        data.keys().hasOnly(['authorUid', 'senderLabel', 'treeBadge', 'channel', 'text', 'createdAt']) &&
+        data.authorUid == request.auth.uid &&
+        isValidId(data.authorUid) &&
+        isValidStr(data.senderLabel, 1, 80) &&
+        isValidStr(data.treeBadge, 1, 64) &&
+        data.channel == 'general' &&
+        isValidStr(data.text, 1, 1000) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPrivateChatRoom(data) {
+      return data.keys().hasAll(['uidA', 'uidB', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uidA', 'uidB', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uidA) &&
+        isValidId(data.uidB) &&
+        data.uidA != data.uidB &&
+        (data.uidA == request.auth.uid || data.uidB == request.auth.uid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateMessage(data) {
+      return data.keys().hasAll(['uidA', 'uidB', 'senderUid', 'senderName', 'text', 'createdAt']) &&
+        data.keys().hasOnly(['uidA', 'uidB', 'senderUid', 'senderName', 'text', 'createdAt']) &&
+        isValidId(data.uidA) &&
+        isValidId(data.uidB) &&
+        data.senderUid == request.auth.uid &&
+        (data.senderUid == data.uidA || data.senderUid == data.uidB) &&
+        isValidStr(data.senderName, 1, 80) &&
+        isValidStr(data.text, 1, 1000) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidStudyRoom(data) {
+      return data.keys().hasAll([
+        'id', 'hostUid', 'hostName', 'title', 'durationSecs', 'remainingSecs',
+        'status', 'participantUids', 'timerUpdatedAt', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id', 'hostUid', 'hostName', 'title', 'durationSecs', 'remainingSecs',
+        'status', 'participantUids', 'timerUpdatedAt', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.id) &&
+      isValidId(data.hostUid) &&
+      isValidStr(data.hostName, 1, 80) &&
+      isValidStr(data.title, 1, 100) &&
+      isIntInRange(data.durationSecs, 10, 10800) &&
+      isIntInRange(data.remainingSecs, 0, 10800) &&
+      data.status in ['waiting', 'running', 'paused', 'ended'] &&
+      data.participantUids is list &&
+      data.participantUids.size() >= 1 &&
+      data.participantUids.size() <= 8 &&
+      isValidId(data.participantUids[0]) &&
+      data.hostUid in data.participantUids &&
+      data.timerUpdatedAt is timestamp &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidStudyRoomMember(data) {
+      return data.keys().hasAll([
+        'roomId', 'uid', 'fullname', 'className', 'treeName', 'level',
+        'status', 'intention', 'createdAt', 'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'roomId', 'uid', 'fullname', 'className', 'treeName', 'level',
+        'status', 'intention', 'createdAt', 'updatedAt'
+      ]) &&
+      isValidId(data.roomId) &&
+      isValidId(data.uid) &&
+      data.uid == request.auth.uid &&
+      isValidStr(data.fullname, 1, 80) &&
+      isValidStr(data.className, 1, 40) &&
+      isValidStr(data.treeName, 1, 32) &&
+      isIntInRange(data.level, 1, 10) &&
+      data.status in ['ready', 'focusing', 'paused', 'away', 'completed', 'left'] &&
+      isValidStr(data.intention, 0, 140) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // =========================================================================
+    // CONNECTION HEALTH CHECK
+    // =========================================================================
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    // =========================================================================
+    // USERS & SUBCOLLECTIONS (Strictly Owner-Only PII Isolation)
+    // =========================================================================
+    match /users/{uid} {
+      allow get: if isOwner(uid) && isValidId(uid);
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(uid) &&
+        isValidId(uid) &&
+        isValidUserProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(uid) &&
+        isValidId(uid) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          // Action: Update Profile / Rename Tree / Class
+          incoming().diff(existing()).affectedKeys().hasOnly(['fullname', 'className', 'schoolName', 'treeName', 'hasNamedTree', 'updatedAt']) ||
+          // Action: Grant XP / Seeds / Focus / Dragon / Explored Stages / Interruption
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'level', 'xp', 'maxXp', 'seedPoints', 'streakDays', 'lastActiveDate',
+            'todayFocusMins', 'weeklyFocusMins', 'socialInterruptionCount',
+            'dragonUpgradeLevel', 'exploredStages', 'hasBadgeKienTri', 'updatedAt'
+          ]) ||
+          // Action: Save CDS-HS Score
+          incoming().diff(existing()).affectedKeys().hasOnly(['lastCdsScore', 'updatedAt']) ||
+          // Action: Submit KHKT Survey
+          incoming().diff(existing()).affectedKeys().hasOnly(['khktSurvey', 'updatedAt'])
+        );
+
+      allow delete: if false;
+
+      match /tasks/{taskId} {
+        allow get: if isOwner(uid) && isValidId(uid) && isValidId(taskId) && userExists(uid);
+        allow list: if isOwner(uid) && existing().uid == request.auth.uid;
+
+        allow create: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(taskId) &&
+          isValidUserTask(incoming()) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          userExists(uid);
+
+        allow update: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(taskId) &&
+          isValidUserTask(incoming()) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          userExists(uid) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'rewarded', 'text', 'category', 'updatedAt']);
+
+        allow delete: if isVerifiedOwner(uid) && isValidId(uid) && isValidId(taskId) && userExists(uid);
+      }
+
+      match /plantQuests/{questId} {
+        allow get: if isOwner(uid) && isValidId(uid) && isValidId(questId) && userExists(uid);
+        allow list: if isOwner(uid) && existing().uid == request.auth.uid;
+
+        allow create: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(questId) &&
+          isValidPlantQuest(incoming()) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          userExists(uid);
+
+        allow update: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(questId) &&
+          isValidPlantQuest(incoming()) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          userExists(uid) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'count', 'updatedAt']);
+
+        allow delete: if isVerifiedOwner(uid) && isValidId(uid) && isValidId(questId) && userExists(uid);
+      }
+
+      match /journals/{journalId} {
+        allow get: if isOwner(uid) && isValidId(uid) && isValidId(journalId) && userExists(uid);
+        allow list: if isOwner(uid) && existing().uid == request.auth.uid;
+
+        allow create: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(journalId) &&
+          isValidJournalEntry(incoming()) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          userExists(uid);
+
+        allow update: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(journalId) &&
+          isValidJournalEntry(incoming()) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          userExists(uid) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['aiCognitiveTrap', 'aiInsight', 'aiNextStep', 'updatedAt']);
+
+        allow delete: if isVerifiedOwner(uid) && isValidId(uid) && isValidId(journalId) && userExists(uid);
+      }
+
+      match /cdsRecords/{recordId} {
+        allow get: if isOwner(uid) && isValidId(uid) && isValidId(recordId) && userExists(uid);
+        allow list: if isOwner(uid) && existing().uid == request.auth.uid;
+
+        allow create: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(recordId) &&
+          isValidCdsRecord(incoming()) &&
+          incoming().createdAt == request.time &&
+          userExists(uid);
+
+        allow update, delete: if false;
+      }
+
+      match /aiMessages/{messageId} {
+        allow get: if isOwner(uid) && isValidId(uid) && isValidId(messageId) && userExists(uid);
+        allow list: if isOwner(uid) && existing().uid == request.auth.uid;
+
+        allow create: if isVerifiedOwner(uid) &&
+          isValidId(uid) &&
+          isValidId(messageId) &&
+          isValidAiMessage(incoming()) &&
+          incoming().createdAt == request.time &&
+          userExists(uid);
+
+        allow update: if false;
+        allow delete: if isVerifiedOwner(uid) && isValidId(uid) && isValidId(messageId) && userExists(uid);
+      }
+    }
+
+    // =========================================================================
+    // PUBLIC GARDENS (Non-PII Leaderboard & Discovery)
+    // =========================================================================
+    match /publicGardens/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && existing().isPublic == true;
+      allow list: if isSignedIn() && existing().isPublic == true && existing().uid is string;
+
+      allow create: if isVerifiedOwner(uid) &&
+        isValidId(uid) &&
+        isValidPublicGarden(incoming()) &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(uid) &&
+        isValidId(uid) &&
+        isValidPublicGarden(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'fullname', 'className', 'schoolName', 'treeName',
+          'level', 'xp', 'streakDays', 'todayFocusMins', 'dragonUpgradeLevel',
+          'isPublic', 'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // FRIEND REQUESTS (Terminal State Locked)
+    // =========================================================================
+    match /friendRequests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) &&
+        (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+        (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+
+      allow create: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        isValidFriendRequest(incoming()) &&
+        incoming().fromUid == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        publicGardenExists(incoming().toUid);
+
+      allow update: if isVerifiedUser() &&
+        isValidId(requestId) &&
+        isValidFriendRequest(incoming()) &&
+        existing().status == 'pending' &&
+        existing().toUid == request.auth.uid &&
+        incoming().fromUid == existing().fromUid &&
+        incoming().toUid == existing().toUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().status in ['accepted', 'declined'] &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // FRIENDSHIPS & SHARED STREAKS
+    // =========================================================================
+    match /friendships/{pairId} {
+      allow get: if isSignedIn() && isValidId(pairId) &&
+        (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+        (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid);
+
+      allow create: if isVerifiedUser() &&
+        isValidId(pairId) &&
+        isValidFriendship(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        publicGardenExists(incoming().uidA) &&
+        publicGardenExists(incoming().uidB);
+
+      allow update: if isVerifiedUser() &&
+        isValidId(pairId) &&
+        isValidFriendship(incoming()) &&
+        (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid) &&
+        incoming().uidA == existing().uidA &&
+        incoming().uidB == existing().uidB &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['days', 'lastCoStudyDate', 'coTreeXp', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // GARDEN GIFTS (Terminal State Locked)
+    // =========================================================================
+    match /gardenGifts/{giftId} {
+      allow get: if isSignedIn() && isValidId(giftId) &&
+        (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+
+      allow list: if isSignedIn() &&
+        (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+
+      allow create: if isVerifiedUser() &&
+        isValidId(giftId) &&
+        isValidGardenGift(incoming()) &&
+        incoming().fromUid == request.auth.uid &&
+        incoming().status == 'pending' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        publicGardenExists(incoming().toUid);
+
+      allow update: if isVerifiedUser() &&
+        isValidId(giftId) &&
+        isValidGardenGift(incoming()) &&
+        existing().status == 'pending' &&
+        existing().toUid == request.auth.uid &&
+        incoming().fromUid == existing().fromUid &&
+        incoming().toUid == existing().toUid &&
+        incoming().xpAmount == existing().xpAmount &&
+        incoming().seedCost == existing().seedCost &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().status == 'claimed' &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // SCHOOL FORUM MESSAGES
+    // =========================================================================
+    match /forumMessages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && existing().channel == 'general';
+      allow list: if isSignedIn() && existing().channel == 'general';
+
+      allow create: if isVerifiedUser() &&
+        isValidId(messageId) &&
+        isValidForumMessage(incoming()) &&
+        incoming().createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+
+    // =========================================================================
+    // PRIVATE 1-1 PEER CHAT ROOMS & MESSAGES (Master Gate)
+    // =========================================================================
+    match /privateChats/{pairId} {
+      allow get: if isSignedIn() && isValidId(pairId) &&
+        (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid);
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(pairId) &&
+        isValidPrivateChatRoom(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        publicGardenExists(incoming().uidA) &&
+        publicGardenExists(incoming().uidB);
+
+      allow update: if isVerifiedUser() &&
+        isValidId(pairId) &&
+        isValidPrivateChatRoom(incoming()) &&
+        (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid) &&
+        incoming().uidA == existing().uidA &&
+        incoming().uidB == existing().uidB &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['updatedAt']);
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(pairId) && isValidId(messageId) && isChatRoomParticipant(pairId);
+        allow list: if isSignedIn() && (existing().uidA == request.auth.uid || existing().uidB == request.auth.uid);
+
+        allow create: if isVerifiedUser() &&
+          isValidId(pairId) &&
+          isValidId(messageId) &&
+          isValidPrivateMessage(incoming()) &&
+          incoming().createdAt == request.time &&
+          isChatRoomParticipant(pairId) &&
+          incoming().uidA == getChatRoom(pairId).uidA &&
+          incoming().uidB == getChatRoom(pairId).uidB;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // =========================================================================
+    // REAL-TIME GROUP STUDY ROOMS & PARTICIPANT STATUS (Master Gate)
+    // =========================================================================
+    match /studyRooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) &&
+        request.auth.uid in existing().participantUids;
+
+      allow list: if isSignedIn() &&
+        request.auth.uid in existing().participantUids;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(roomId) &&
+        isValidStudyRoom(incoming()) &&
+        incoming().id == roomId &&
+        incoming().hostUid == request.auth.uid &&
+        incoming().status == 'waiting' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        incoming().timerUpdatedAt == request.time;
+
+      allow update: if isVerifiedUser() &&
+        isValidId(roomId) &&
+        isValidStudyRoom(incoming()) &&
+        existing().status != 'ended' &&
+        existing().hostUid == request.auth.uid &&
+        incoming().id == existing().id &&
+        incoming().hostUid == existing().hostUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (incoming().timerUpdatedAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'durationSecs', 'remainingSecs', 'title', 'timerUpdatedAt', 'updatedAt'
+            ])) ||
+          (incoming().timerUpdatedAt == existing().timerUpdatedAt &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['participantUids', 'updatedAt']))
+        );
+
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(memberUid) && isStudyRoomParticipant(roomId);
+        allow list: if false;
+
+        allow create: if isVerifiedOwner(memberUid) &&
+          isValidId(roomId) &&
+          isValidId(memberUid) &&
+          isValidStudyRoomMember(incoming()) &&
+          incoming().roomId == roomId &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          isStudyRoomParticipant(roomId);
+
+        allow update: if isVerifiedOwner(memberUid) &&
+          isValidId(roomId) &&
+          isValidId(memberUid) &&
+          isValidStudyRoomMember(incoming()) &&
+          incoming().roomId == existing().roomId &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          isStudyRoomParticipant(roomId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'fullname', 'className', 'treeName', 'level', 'status', 'intention', 'updatedAt'
+          ]);
+
+        allow delete: if false;
+      }
+    }
+  }
+}

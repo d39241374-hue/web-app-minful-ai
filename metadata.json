@@ -1,0 +1,8 @@
+{
+  "name": "Mindful AI – Vườn Tâm Trí 3D",
+  "description": "Nền tảng học tập tập trung Deep Work, đánh giá Bất hòa nhận thức số (CDS-HS), cố vấn Gemini AI và Vườn Tâm Trí 3D 10 cấp độ đồng bộ đám mây cho học sinh THPT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

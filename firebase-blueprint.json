@@ -1,0 +1,392 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private student profile containing PII (email), tree progression, Dragon tier, and research survey.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "fullname": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "className": { "type": "string", "maxLength": 40 },
+        "schoolName": { "type": "string", "maxLength": 100 },
+        "treeName": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "hasNamedTree": { "type": "boolean" },
+        "level": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "maxXp": { "type": "integer" },
+        "seedPoints": { "type": "integer" },
+        "streakDays": { "type": "integer" },
+        "lastActiveDate": { "type": "string", "maxLength": 20 },
+        "todayFocusMins": { "type": "integer" },
+        "weeklyFocusMins": { "type": "array" },
+        "socialInterruptionCount": { "type": "integer" },
+        "dragonUpgradeLevel": { "type": "integer" },
+        "lastCdsScore": { "type": "number" },
+        "exploredStages": { "type": "array" },
+        "hasBadgeKienTri": { "type": "boolean" },
+        "khktSurvey": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "email",
+        "fullname",
+        "className",
+        "schoolName",
+        "treeName",
+        "hasNamedTree",
+        "level",
+        "xp",
+        "maxXp",
+        "seedPoints",
+        "streakDays",
+        "lastActiveDate",
+        "todayFocusMins",
+        "weeklyFocusMins",
+        "socialInterruptionCount",
+        "dragonUpgradeLevel",
+        "exploredStages",
+        "hasBadgeKienTri",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserTask": {
+      "title": "UserTask",
+      "description": "Student Deep Work learning task stored under user profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "category": { "type": "string", "maxLength": 40 },
+        "estimatedMins": { "type": "integer" },
+        "completed": { "type": "boolean" },
+        "rewarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "text", "category", "completed", "rewarded", "createdAt", "updatedAt"]
+    },
+    "PlantQuest": {
+      "title": "PlantQuest",
+      "description": "Seed watering quest for nurturing the 3D Mind Tree.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "seedCost": { "type": "integer" },
+        "repeatable": { "type": "boolean" },
+        "completed": { "type": "boolean" },
+        "count": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "text", "seedCost", "repeatable", "completed", "count", "createdAt", "updatedAt"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "7-item psychological reflection journal with Gemini AI cognitive trap analysis.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "dateLabel": { "type": "string", "maxLength": 40 },
+        "mood": { "type": "string", "maxLength": 80 },
+        "screenTime": { "type": "string", "maxLength": 80 },
+        "deepWorkNote": { "type": "string", "maxLength": 120 },
+        "distractionLesson": { "type": "string", "maxLength": 600 },
+        "gratitude": { "type": "string", "maxLength": 400 },
+        "tomorrowPlan": { "type": "string", "maxLength": 400 },
+        "cdsNote": { "type": "string", "maxLength": 40 },
+        "aiCognitiveTrap": { "type": "string", "maxLength": 160 },
+        "aiInsight": { "type": "string", "maxLength": 800 },
+        "aiNextStep": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "dateLabel",
+        "mood",
+        "screenTime",
+        "deepWorkNote",
+        "distractionLesson",
+        "gratitude",
+        "tomorrowPlan",
+        "cdsNote",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CdsRecord": {
+      "title": "CdsRecord",
+      "description": "CDS-HS 10-question assessment record.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "dateLabel": { "type": "string", "maxLength": 30 },
+        "score": { "type": "number" },
+        "answers": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "dateLabel", "score", "answers", "createdAt"]
+    },
+    "PublicGarden": {
+      "title": "PublicGarden",
+      "description": "Non-PII public garden card for leaderboard, classmate discovery, and 3D garden visits.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullname": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "className": { "type": "string", "maxLength": 40 },
+        "schoolName": { "type": "string", "maxLength": 100 },
+        "treeName": { "type": "string", "maxLength": 32 },
+        "level": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "streakDays": { "type": "integer" },
+        "todayFocusMins": { "type": "integer" },
+        "dragonUpgradeLevel": { "type": "integer" },
+        "isPublic": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "uid",
+        "fullname",
+        "className",
+        "schoolName",
+        "treeName",
+        "level",
+        "xp",
+        "streakDays",
+        "todayFocusMins",
+        "dragonUpgradeLevel",
+        "isPublic",
+        "updatedAt"
+      ]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Study buddy friend request between two students.",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "fromName": { "type": "string", "maxLength": 80 },
+        "fromClass": { "type": "string", "maxLength": 40 },
+        "fromTreeName": { "type": "string", "maxLength": 32 },
+        "fromLevel": { "type": "integer" },
+        "toUid": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "fromName", "fromClass", "fromTreeName", "fromLevel", "toUid", "status", "createdAt", "updatedAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Accepted study buddy connection tracking shared streak days and co-study XP.",
+      "type": "object",
+      "properties": {
+        "uidA": { "type": "string", "maxLength": 128 },
+        "uidB": { "type": "string", "maxLength": 128 },
+        "days": { "type": "integer" },
+        "lastCoStudyDate": { "type": "string", "maxLength": 20 },
+        "coTreeXp": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uidA", "uidB", "days", "lastCoStudyDate", "coTreeXp", "createdAt", "updatedAt"]
+    },
+    "GardenGift": {
+      "title": "GardenGift",
+      "description": "XP nutrient gift sent from one friend to another's 3D Mind Tree.",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "fromName": { "type": "string", "maxLength": 80 },
+        "toUid": { "type": "string", "maxLength": 128 },
+        "xpAmount": { "type": "integer" },
+        "seedCost": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "claimed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "fromName", "toUid", "xpAmount", "seedCost", "status", "createdAt", "updatedAt"]
+    },
+    "ForumMessage": {
+      "title": "ForumMessage",
+      "description": "School-wide mindful forum message.",
+      "type": "object",
+      "properties": {
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "senderLabel": { "type": "string", "maxLength": 80 },
+        "treeBadge": { "type": "string", "maxLength": 64 },
+        "channel": { "type": "string", "enum": ["general"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorUid", "senderLabel", "treeBadge", "channel", "text", "createdAt"]
+    },
+    "PrivateChatRoom": {
+      "title": "PrivateChatRoom",
+      "description": "Parent metadata document for 1-1 peer chat rooms.",
+      "type": "object",
+      "properties": {
+        "uidA": { "type": "string", "maxLength": 128 },
+        "uidB": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uidA", "uidB", "createdAt", "updatedAt"]
+    },
+    "PrivateMessage": {
+      "title": "PrivateMessage",
+      "description": "1-1 private chat message between two participants.",
+      "type": "object",
+      "properties": {
+        "uidA": { "type": "string", "maxLength": 128 },
+        "uidB": { "type": "string", "maxLength": 128 },
+        "senderUid": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 80 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uidA", "uidB", "senderUid", "senderName", "text", "createdAt"]
+    },
+    "AiChatMessage": {
+      "title": "AiChatMessage",
+      "description": "Private 1-1 conversation turn between student and Gemini AI counselor/tutor.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "mode": { "type": "string", "enum": ["counselor", "math", "literature", "english"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "mode", "text", "createdAt"]
+    },
+    "StudyRoom": {
+      "title": "StudyRoom",
+      "description": "Real-time group Deep Work session room synchronizing timer state across invited study buddies.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "hostUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "hostName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "durationSecs": { "type": "integer" },
+        "remainingSecs": { "type": "integer" },
+        "status": { "type": "string", "enum": ["waiting", "running", "paused", "ended"] },
+        "participantUids": { "type": "array" },
+        "timerUpdatedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "hostUid",
+        "hostName",
+        "title",
+        "durationSecs",
+        "remainingSecs",
+        "status",
+        "participantUids",
+        "timerUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StudyRoomMember": {
+      "title": "StudyRoomMember",
+      "description": "Live status record of an individual participant inside a group Deep Work room.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "fullname": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "className": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "treeName": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "level": { "type": "integer" },
+        "status": { "type": "string", "enum": ["ready", "focusing", "paused", "away", "completed", "left"] },
+        "intention": { "type": "string", "maxLength": 140 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "roomId",
+        "uid",
+        "fullname",
+        "className",
+        "treeName",
+        "level",
+        "status",
+        "intention",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account data and progression."
+    },
+    "/users/{uid}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/UserTask" },
+      "description": "User learning tasks subcollection."
+    },
+    "/users/{uid}/plantQuests/{questId}": {
+      "schema": { "$ref": "#/entities/PlantQuest" },
+      "description": "User 3D tree watering quests subcollection."
+    },
+    "/users/{uid}/journals/{journalId}": {
+      "schema": { "$ref": "#/entities/JournalEntry" },
+      "description": "User 7-item psychological reflection journals subcollection."
+    },
+    "/users/{uid}/cdsRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/CdsRecord" },
+      "description": "User CDS-HS assessment history subcollection."
+    },
+    "/users/{uid}/aiMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/AiChatMessage" },
+      "description": "User private Gemini AI counselor and subject tutor history."
+    },
+    "/publicGardens/{uid}": {
+      "schema": { "$ref": "#/entities/PublicGarden" },
+      "description": "Public non-PII garden summaries for leaderboard and friend discovery."
+    },
+    "/friendRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Friend invitations between students."
+    },
+    "/friendships/{pairId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Mutual friendships and co-study shared streaks."
+    },
+    "/gardenGifts/{giftId}": {
+      "schema": { "$ref": "#/entities/GardenGift" },
+      "description": "XP nutrient gifts between friends."
+    },
+    "/forumMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ForumMessage" },
+      "description": "General school forum messages."
+    },
+    "/privateChats/{pairId}": {
+      "schema": { "$ref": "#/entities/PrivateChatRoom" },
+      "description": "Parent document defining participants of a 1-1 chat room."
+    },
+    "/privateChats/{pairId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/PrivateMessage" },
+      "description": "Messages inside a 1-1 chat room."
+    },
+    "/studyRooms/{roomId}": {
+      "schema": { "$ref": "#/entities/StudyRoom" },
+      "description": "Real-time group Deep Work session rooms."
+    },
+    "/studyRooms/{roomId}/members/{memberUid}": {
+      "schema": { "$ref": "#/entities/StudyRoomMember" },
+      "description": "Participant live focus status records inside a group study room."
+    }
+  }
+}
